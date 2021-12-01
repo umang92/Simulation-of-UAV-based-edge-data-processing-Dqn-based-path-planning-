@@ -82,8 +82,9 @@ def map_feature_new(datarate, UAVlist, E_wait, size_fx, size_fy):  # return 600 
     return feature_map.copy()
 
 
-Ed=10000                             #total slot
-
+Ed=5000 #num episodes
+num_slots=500                           #total slot
+update_target_slot=num_slots/20
 ep0=0.97
 batch_size=12                 #training samples per batch
 pl_step=5                    #How many steps will The system plan the next destination
@@ -126,7 +127,7 @@ reset_p_T=800
 
 #jud=70000
 gammalist=[0,0.1,0.2,0.3,0.5,0.6,0.7,0.8,0.9]
-Mentrd=np.zeros([num_UAV,Ed])
+Mentrd=np.zeros([Ed, num_slots, num_UAV])
 
 #generate UAV agent
 UAVlist=[]
@@ -146,8 +147,7 @@ data=np.zeros([num_UAV])
 #pre_data=np.zeros([num_UAV])
 
 #define record data buf
-cover=np.zeros([Ed])
-
+cover=np.zeros([Ed, num_slots])
 #init plt
 plt.close()  #clf() # 清图  cla() # 清坐标轴 close() # 关窗口
 fig=plt.figure()
@@ -163,79 +163,70 @@ fg=1
 
 start=time.time()
 
+def reset():
+    E_wait = np.ones([mapx + 1, mapy + 1])
+    P_cen = np.array([50, 50])
+    for i in range(num_sensor):
+        sensorlist.append(sensor_agent([p_sensor['W'][i], p_sensor['H'][i]], C, region, averate, slot))
+    for i in range(num_UAV):
+        UAVlist.append(UAV_agent(i, com_r, region_obstacle, region, omeg, slot, t_bandwidth, cal_L, k, f_max, p_max))
+    prebuf=np.zeros([num_UAV])
+    data=np.zeros([num_UAV])
+    OUT = np.zeros([num_UAV])
+    reward = np.zeros([num_UAV])
+
 print(os.getcwd())
-for t in range(Ed):  #move first, get the data, offload collected data
+for t in range(Ed):
+    reset()
     gp.gen_datarate(averate,region_rate)
     print(f"start episode {t} time elapsed: {time.time()-start}")
-    if t%T==0 and t>0:
-        Center.epsilon=ep0
-        Center.save("./save/center-dqn.h5")
-        np.save("record_rd3", Mentrd)
-        np.save("cover_hungry_10", cover)
-    if t%pl_step==0:
-        #pre_feature=[]
-        aft_feature=[]
-        act_note=[]
-        pre_feature=map_feature_new(region_rate,UAVlist,E_wait, mapx, mapy)    #record former feature
-        act_note=Center.act(pre_feature,fg)          # get the action V
-        #act_note.append(act)                  #record the taken action
-        #action_probs, critic_value = model(state)
-        #critic_value_history.appe
-        # nd(critic_value[0, 0])
-    for i in range(num_UAV):
+    state=None
+    for slot in range(num_slots):
+        print(f"start slot {slot} of episode {t} time elapsed: {time.time() - start}")
+        if slot%pl_step==0:
+            aft_feature=[]
+            act_note=[]
+            pre_feature=map_feature_new(region_rate,UAVlist,E_wait, mapx, mapy)    #record former feature
+            act_note=Center.act(pre_feature,fg)          # get the action V
 
-        OUT[i]=UAVlist[i].fresh_position(vlist[act_note[i]],region_obstacle)     #execute the action
-        UAVlist[i].cal_hight()
-        X[i]=UAVlist[i].position[0]
-        Y[i]=UAVlist[i].position[1]
-        UAVlist[i].fresh_buf()
-        prebuf[i]=UAVlist[i].data_buf   #the buf after fresh by server
+        for i in range(num_UAV):
+            OUT[i]=UAVlist[i].fresh_position(vlist[act_note[i]],region_obstacle)     #execute the action
+            UAVlist[i].cal_hight()
+            X[i]=UAVlist[i].position[0]
+            Y[i]=UAVlist[i].position[1]
+            UAVlist[i].fresh_buf()
+            prebuf[i]=UAVlist[i].data_buf   #the buf after fresh by server
 
-    prevrdw = sum(sum(E_wait))
-    gp.list_gama(g0,d0,the,UAVlist,P_cen)
+        prevrdw = sum(sum(E_wait))
+        gp.list_gama(g0,d0,the,UAVlist,P_cen)
 
-    for i in range(num_sensor):          #fresh buf send data to UAV
-        sensorlist[i].data_rate=region_rate[sensorlist[i].rNo]
-        sensorlist[i].fresh_buf(UAVlist)
-        cover[t]=cover[t]+sensorlist[i].wait
-    cover[t]=cover[t]/num_sensor
-    print(cover[t])
-    E_wait = gp.W_wait(mapx, mapy, sensorlist)
-    fresh_rdw = sum(sum(E_wait))
-    for i in range(num_UAV):
-        reward[i] = reward[i] + prevrdw - fresh_rdw
-        #reward[i] = reward[i]+UAVlist[i].data_buf-prebuf[i]
-        Mentrd[i,t] = reward[i]
-        print(f'reward of UAV {i} is {reward[i]} ')
-#    if sum(OUT)>=num_UAV/2:
-#        fg=0
-#    if np.random.rand()>0.82 and fg==0:
-#        fg=1
-    
-    if t%pl_step==0:
-        E_wait=gp.W_wait(300,300,sensorlist)
-        rdw=sum(sum(E_wait))
-        print(t)
-        for i in range(num_UAV):        #calculate the reward : need the modify
-#            aft_feature.append(UAVlist[i].map_feature(region_rate,UAVlist,E_wait))    #recode the current feature
-            rd=reward[i]/1000
-            reward[i]=0
-            UAVlist[i].reward=rd
+        for i in range(num_sensor):          #fresh buf send data to UAV
+            sensorlist[i].data_rate=region_rate[sensorlist[i].rNo]
+            sensorlist[i].fresh_buf(UAVlist)
+            cover[t, slot]=cover[t, slot]+sensorlist[i].wait
+        cover[t, slot]=cover[t, slot]/num_sensor
+        print(f"cover : {cover[t, slot]}")
+        E_wait = gp.W_wait(mapx, mapy, sensorlist)
+        fresh_rdw = sum(sum(E_wait))
+        for i in range(num_UAV):
+            reward[i] = reward[i] + prevrdw - fresh_rdw
+            #reward[i] = reward[i]+UAVlist[i].data_buf-prebuf[i]
+            Mentrd[t, slot, i] = reward[i]
+            print(f'reward of UAV {i} is {reward[i]} ')
+        if state is not None:
+            Center.remember(state, act_note, reward, pre_feature, t)
+        if slot%pl_step==0:
+            state = pre_feature
+            if slot >= batch_size:
+                Center.replay(batch_size, t, slot)
+            for i in range(num_UAV):        #calculate the reward : need the modify
+                reward[i]=0
+        if slot%update_target_slot==0:
+            Center.update_target_model()
+            Center.save("./save/center-dqn.h5")
+            np.save("record_rd3",Mentrd)
 
-#     if t>0:
-#         ax.clear()
-#     plt.xlim((0,300))
-#     plt.ylim((0,300))
-#     plt.grid(True) #添加网格
-#
-#     ax.scatter(X,Y,c='b',marker='.')  #散点图
-# #    if t>0:
-#     plt.pause(0.1)
-
-    
-# np.save("record_rd3",Mentrd)
-# np.save("cover_hungry_10",cover)
-# fig=plt.figure()
-# plt.plot(cover)
-# plt.show()
-
+    Center.epsilon=ep0
+    Center.save("./save/center-dqn.h5")
+    np.save("record_rd3", Mentrd)
+    np.save("cover_hungry_10", cover)

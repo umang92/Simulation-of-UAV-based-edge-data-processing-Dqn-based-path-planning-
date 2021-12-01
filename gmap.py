@@ -57,7 +57,7 @@ def position_sensor(region,num_sensor):
 def gen_datarate(averate,region_rate):
     num=len(region_rate)
     for i in range(num):
-        region_rate[i]=np.random.uniform(0.9*averate[i],1.2*averate[i])
+        region_rate[i] = averate[i] #np.random.uniform(0.9*averate[i],1.2*averate[i])
     return 1
     
 def gen_obs(num_region):
@@ -77,24 +77,24 @@ def gen_gama(g0,d0,the,d):  #input position as array
 def list_gama(g0,d0,the,UAVlist,P_cen):
     num_U=len(UAVlist)
     for i in range(num_U):
-        P_self=np.array([UAVlist[i].position[0],UAVlist[i].position[1]])
-        d=max(50,np.linalg.norm(P_cen-P_self))
-        gama=gen_gama(g0,d0,the,d)
-        UAVlist[i].gama=gama
+        P_self = np.array([UAVlist[i].position[0],UAVlist[i].position[1]])
+        d = max(50,np.linalg.norm(P_cen-P_self))
+        gama = gen_gama(g0,d0,the,d)
+        UAVlist[i].gama = gama
     return 1
 
 def find_pos(position):
-    x=np.floor(position[0])
-    y=np.floor(position[1])
+    x = np.floor(position[0])
+    y = np.floor(position[1])
     return [int(x),int(y)]
 
 # The observations in discrete map nodes
 def W_wait(width,height,sensorlist):
-    E_wait=np.zeros([height+1,width+1])
-    num_sen=len(sensorlist)
-    step=1
+    E_wait = np.zeros([height+1,width+1])
+    num_sen = len(sensorlist)
+    step = 1
     for i in range(num_sen):
-        pos=find_pos(sensorlist[i].position)
+        pos = find_pos(sensorlist[i].position)
         E_wait[pos[1],pos[0]] +=sensorlist[i].wait
         for j in range(step):
             j+=1

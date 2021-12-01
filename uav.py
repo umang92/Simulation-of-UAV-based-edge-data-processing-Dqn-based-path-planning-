@@ -57,7 +57,7 @@ class UAV_agent:
             else:
                 self.hight=self.r*mid
                 return self.hight
-        
+
         self.hight=self.r*mid
         return self.hight
     
@@ -180,5 +180,4 @@ class UAV_agent:
                                 feature[i,j,0]=0
                             feature[i,j,0]=feature[i,j,0]-8000
         feature=feature/100
-#                            break
         return feature.copy()
