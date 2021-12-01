@@ -33,19 +33,21 @@ class sensor_agent:
         temp=[]
         inf=1e15
         for i in range(num):
-            md=min(distance)
+            md =min(distance)
             if md>min_d+1:
                 break
             l0=distance.index(md)
             temp.append(l0)
             distance[l0]=inf
-        min_idx=random.sample(temp,1)[0]
+        min_idx = random.sample(temp,1)[0]
         if(min_d>UAVlist[min_idx].r):
-            self.wait=self.wait+1
+            self.wait = self.wait+1
             return -1
         else:
             UAVlist[min_idx].data_buf=UAVlist[min_idx].data_buf+min(self.databuf,self.slot*self.capacity)
-            pre_buf=self.databuf
-            self.databuf=max(0,self.databuf-self.slot*self.capacity)
-            self.wait=self.databuf*self.wait/pre_buf
+            pre_buf = self.databuf
+            self.databuf = max(0,self.databuf-self.slot*self.capacity)
+            self.wait = 0 #self.databuf*self.wait/pre_buf
+            if self.wait>0:
+                print(self.wait)
             return min_idx
